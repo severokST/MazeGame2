@@ -1,16 +1,9 @@
-from engine import Map
-from gui import GUIWindow
+from engine import Engine
+
+obj_engine = Engine(None)
 
 
-
-map = Map()
-map.print_graph()
-
-window = GUIWindow()
-window.map.map_local(map)
-window.run()
-
-
+print('does this hit?')
 
 
 

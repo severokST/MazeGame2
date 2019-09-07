@@ -1,24 +1,37 @@
 from random import choice, randrange
-from math import sin, cos,pi
+from math import sin, cos, pi
+
+from gui import GUIWindow
+from objects import Player
 
 
-neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0),2),
-              round(2 * sin(step*pi/6 if step > 0 else 0),2)) for step in range(1,13,2)]
-#neighbour = [(1,-1), (0,-2), (-1,-1), (-1,1), (0,2), (1,1)]
+neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0), 2),
+              round(2 * sin(step*pi/6 if step > 0 else 0), 2)) for step in range(1, 13, 2)]
+# neighbour = [(1,-1), (0,-2), (-1,-1), (-1,1), (0,2), (1,1)]
+
+class World(object):
+    def __init__(self, save):
+        #self.position = (0,0)
+        feature_list = {}
+
+        if save is None:
+            self.map = Map()
+            self.location = 0
 
 
 class Map(object):
     def __init__(self, max_hex_count=200):
         self.graph = []
         self.map = []
-        new_hex = [(0,0)]
 
-        while len(self.map) < max_hex_count and len(new_hex)>0:
+        new_hex = [(0, 0)]
+
+        while len(self.map) < max_hex_count and len(new_hex) > 0:
 
             # Get index of next hex
             next_id = len(self.map)
 
-            #Get position and parent of next hex
+            # Get position and parent of next hex
             new_position = new_hex.pop(0)
 
             # Make hex and ammend graph
@@ -26,13 +39,12 @@ class Map(object):
             self.graph.append([])
 
             # Search graphs for existing nodes connecting to this id
-                # can have 1-6 parents
+            # can have 1-6 parents
             for existing_graph_entries in self.graph:
                 if next_id in existing_graph_entries:
                     self.graph[next_id].append(self.graph.index(existing_graph_entries))
 
-            #Pick connections
-
+            # Pick connections
             directions = neighbour.copy()
 
             #remove direction items already taken
@@ -42,12 +54,10 @@ class Map(object):
                 except ValueError:
                     pass
 
-
-
             for connection in range(0, randrange(1, 6-len(self.graph[next_id]))):
 
                 location_delta = directions.pop(directions.index(choice(directions)))
-                next_position = (round(new_position[0]+location_delta[0],2), round(new_position[1]+location_delta[1],2))
+                next_position = (round(new_position[0]+location_delta[0], 2), round(new_position[1]+location_delta[1], 2))
 
                 connecting_index = None
 
@@ -90,9 +100,6 @@ class Map(object):
             print ('{}, {}: {}'.format(index, self.map[index].position, self.graph[index]))
 
 
-
-
-
 class Hex(object):
     def __init__(self, position):
         self.position = position
@@ -103,3 +110,31 @@ class Hex(object):
     def delta_position(self, position):
         return (self.position[0] - position[0], self.position[1] - position[1])
 
+
+class Engine(object):
+    def __init__(self, save):
+        # If save is NONE, __init__ is called for default values, otherwise data are loaded from file.
+        self.player = Player(save)
+        self.world = World(save)
+
+        #Build GUI
+        self.gui = GUIWindow()
+        self.gui.map.map_local(self.world.map)
+
+        self.gui.after(int(1000 / 20), self.call)
+        self.gui.bind('<Key>', self.keypress)
+
+        self.gui.run()
+
+    def new_game(self):
+        self.world = World(None)
+        self.player = Player(None)
+
+
+    def keypress(self, event):
+        #Key press macros
+        pass
+
+    def call(self):
+        # Todo Engine update hooks here
+        self.gui.after(int(1000/20), self.call)
