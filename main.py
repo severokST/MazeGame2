@@ -1,14 +1,18 @@
 from random import choice, randrange
-
+from math import sin, cos,pi
 from gui import GUIWindow
 
-neighbour = [(1,-1), (0,-2), (-1,-1), (-1,1), (0,2), (1,1)]
 
+neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0),2),
+              round(2 * sin(step*pi/6 if step > 0 else 0),2)) for step in range(1,13,2)]
+#neighbour = [(1,-1), (0,-2), (-1,-1), (-1,1), (0,2), (1,1)]
+
+print(neighbour)
 
 
 
 class Map(object):
-    def __init__(self, max_hex_count=100):
+    def __init__(self, max_hex_count=200):
         self.graph = []
 
         self.map = []
@@ -45,10 +49,11 @@ class Map(object):
                     pass
 
 
-            for connection in range(0, randrange(1, 5-len(self.graph[next_id]))):
+
+            for connection in range(0, randrange(1, 6-len(self.graph[next_id]))):
 
                 location_delta = directions.pop(directions.index(choice(directions)))
-                next_position = (new_position[0]+location_delta[0], new_position[1]+location_delta[1])
+                next_position = (round(new_position[0]+location_delta[0],2), round(new_position[1]+location_delta[1],2))
 
                 connecting_index = None
 
@@ -63,7 +68,7 @@ class Map(object):
                 # Search if new hex wants to connect to hex already scheduled for creation
                 for hex in new_hex:
                     if next_position == hex:
-                        connecting_index = next_id + new_hex.index(hex)
+                        connecting_index = next_id + new_hex.index(hex)+1
 
                 # If hit not yet found, schedule new hex creation and link to calculated future tile ID.
                 if connecting_index is None:
@@ -83,7 +88,7 @@ class Map(object):
             self.graph[index] = list(x for x in self.graph[index] if x < len(self.graph) )
 
             # Remove any links created that do not have valid return path (if any)
-            self.graph[index] = list(x for x in self.graph[index] if index in self.graph[x])
+            #self.graph[index] = list(x for x in self.graph[index] if index in self.graph[x])
 
 
     def print_graph(self):
@@ -110,6 +115,7 @@ map = Map()
 map.print_graph()
 
 window = GUIWindow()
+print(neighbour)
 window.map.map_local(map)
 window.run()
 
