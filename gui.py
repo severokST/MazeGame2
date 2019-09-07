@@ -25,7 +25,7 @@ class Line(Shape):
     def __init__(self, pos1, pos2, target_canvas,color='black'):
         Shape.__init__(self, pos1, target_canvas, 1)
 
-        self.object = self.canvas.create_line(pos1[0], pos1[1], pos2[0], pos2[1], fill=color)
+        self.object = self.canvas.create_line(pos1[0], pos1[1], pos2[0], pos2[1], fill=color, width=2)
 
 
 class Hex(Shape):
