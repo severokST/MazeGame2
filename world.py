@@ -32,7 +32,7 @@ class Grass(Hex):
     def __init__(self, position):
         Hex.__init__(self, position)
         self.tile = 'Green'
-        self.gen_bias.update({'Grass':1, 'Water':0.3, 'Rock':0.2, 'Sand': 0.1})
+        self.gen_bias.update({'Grass':1, 'Rock':0.2, 'Sand': 0.1})
 
 
 class Rock(Hex):
@@ -61,7 +61,8 @@ class Map(object):
 
         new_hex = [(0, 0)]
 
-        biome_current, biome_remaining = self.biome_selection()
+        biome_current, biome_remaining = 'Grass', 10
+
 
         while len(self.map) < max_hex_count and len(new_hex) > 0:
 
@@ -72,15 +73,13 @@ class Map(object):
             new_position = new_hex.pop(0)
 
 
-
-
             # Make hex and ammend graph
             self.map.append(location_types[biome_current](new_position))
             self.graph.append([])
 
             biome_remaining-=1
             if biome_remaining <1:
-                biome_current, biome_remaining = self.biome_selection()
+                biome_current, biome_remaining = self.biome_selection(next_id)
 
             # Search graphs for existing nodes connecting to this id
             # can have 1-6 parents
@@ -138,9 +137,40 @@ class Map(object):
             # Remove any links created that do not have valid return path (if any)
             #self.graph[index] = list(x for x in self.graph[index] if index in self.graph[x])
 
-    def biome_selection(self):
+    def biome_selection(self, current_id):
 
-        biome_list = [(terrain, quota[1]/quota[0]) for terrain, quota in location_quota.items()]
+        set_neighbour = set()
+
+        list_to_check = [current_id]
+        next_step_list_to_check = []
+
+        # Iterate though graph of connected cells for up to 3 steps
+
+        for iteration in range(0, 3):
+            while len(list_to_check) > 0:
+                target_cell = list_to_check.pop()
+                for new_cells_to_check in self.graph[target_cell]:
+                    if new_cells_to_check != current_id and new_cells_to_check not in set_neighbour:
+                        set_neighbour.add(new_cells_to_check)
+                        next_step_list_to_check.append(new_cells_to_check)
+
+            list_to_check = next_step_list_to_check.copy()
+            next_step_list_to_check.clear()
+
+        # Initialise biome selection weightings
+        selection_bias = {'Grass': 1, 'Sand': 1, 'Rock':1}
+
+        # Step though listed neighbouring cells, accumulate biases where avaliable
+        for cell_id in set_neighbour:
+            cell_gen_bias = self.map[cell_id]
+            for biome_entry, value in cell_gen_bias.gen_bias.items():
+                selection_bias[biome_entry] += value
+
+        # Scale calculated weights against quota tally, Tapers off terrain selection if one type becomes too common.
+        for terrain, quota in location_quota.items():
+            selection_bias[terrain] *= quota[0]/quota[1]
+
+        biome_list = [(terrain, weight) for terrain, weight in selection_bias.items()]
         biome_choices = [biome[0] for biome in biome_list]
         biome_chance = [biome[1] for biome in biome_list]
         biome_chance = [biome/sum(biome_chance) for biome in biome_chance]
