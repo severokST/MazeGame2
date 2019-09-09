@@ -5,9 +5,15 @@ from numpy.random import choice as weighted_choice
 from math import sin, cos, pi
 from operator import add
 
-world_size = 1000
+world_size = 500
 
-elevation_density = 60
+blur_iterations = 100
+elevation_density = 10
+
+elevation_threshold = 5
+moisture_threshould = 1.01
+sea_level = 1
+mountain_level = 2
 
 neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0), 2),
               round(2 * sin(step*pi/6 if step > 0 else 0), 2)) for step in range(1, 13, 2)]
@@ -150,16 +156,18 @@ class Map(object):
 
             #Randomly apply elevation to selected tiles
             if randrange(0,100) < elevation_density:
-                self.map[index].elevation = randrange(10,100)
+                self.map[index].elevation = randrange(1,5)
 
             # Apply increased moisture levels in tiles neighbouring water (None existant tile positions)
             for direction in neighbour:
                 if self.map[index].delta_position(direction) not in position_list:
-                    self.map[index].moisture += randrange(10,30)
+                    self.map[index].moisture += randrange(1,5)
 
         # 3x blur filter pass on each tile to smooth
+        blur_magnitude = 0.1 / blur_iterations
+        for iteration in range(0,blur_iterations):
 
-        for iteration in range(0,100):
+            print('Blur iteration: ')
             update_list_elevation, update_list_moisture = [], []
             for index in range(0, len(self.graph)):
                 current_tile = self.map[index]
@@ -170,7 +178,7 @@ class Map(object):
 
                 # Iterate though graph of connected cells for up to 3 steps
 
-                for iteration in range(0, 5):
+                for iteration in range(0, 10):
                     while len(list_to_check) > 0:
                         target_cell = list_to_check.pop()
                         for index in range(0, len(self.map)):
@@ -180,15 +188,15 @@ class Map(object):
 
                     for blur_index in set_locations:
                         try:
-                            update_list_elevation[index] += (self.map[blur_index].elevation - current_tile.elevation) * 0.05
-                            update_list_moisture[index] += (self.map[blur_index].moisture - current_tile.moisture) * 0.05
+                            update_list_elevation[index] += (self.map[blur_index].elevation - current_tile.elevation) * blur_magnitude
+                            update_list_moisture[index] += (self.map[blur_index].moisture - current_tile.moisture) * blur_magnitude
                         except IndexError:
                             pass
 
             for index in range(0, len(self.map)):
                 try:
-                    self.map[index].moisture += update_list_moisture[index]
-                    self.map[index].elevation += update_list_elevation[index]
+                    self.map[index].moisture = update_list_moisture[index]
+                    self.map[index].elevation = update_list_elevation[index]
                 except IndexError:
                     pass
 
@@ -196,23 +204,38 @@ class Map(object):
             current_tile = self.map[index]
             moisture, elevation = current_tile.moisture, current_tile.elevation
 
-            if elevation  < 10:
+            if elevation < sea_level:
                 self.map[index] = Water(current_tile.position)
                 continue
 
-            if moisture > 20:
-                self.map[index] = Grass(current_tile.position)
-                continue
-
-            if elevation >40:
+            if elevation > mountain_level:
                 self.map[index] = Rock(current_tile.position)
                 continue
 
-            self.map[index] = Sand(current_tile.position)
+            if moisture > moisture_threshould:
+                self.map[index] = Grass(current_tile.position)
+                continue
+
+            if moisture < moisture_threshould:
+                self.map[index] = Sand(current_tile.position)
+
+
+            #if elevation > elevation_threshold and moisture < moisture_threshould:
+            #        self.map[index] = Rock(current_tile.position)
+
+            #if elevation < elevation_threshold and moisture < moisture_threshould:
+            #        self.map[index] = Sand(current_tile.position)
+
+            #if elevation < elevation_threshold and moisture > moisture_threshould:
+            #        self.map[index] = Water(current_tile.position)
+
+            #if elevation > elevation_threshold and moisture > moisture_threshould:
+            #        self.map[index] = Grass(current_tile.position)
 
 
 
 
+        self.print_graph()
 
             # Remove any links created that do not have valid return path (if any)
             #self.graph[index] = list(x for x in self.graph[index] if index in self.graph[x])
