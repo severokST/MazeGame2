@@ -4,7 +4,8 @@ from math import sin, cos, pi
 
 from operator import add
 
-render_graph = True
+render_graph = False
+render_barriers = True
 
 neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0),2),
               round(2 * sin(step*pi/6 if step > 0 else 0),2)) for step in range(1,13,2)]
@@ -99,15 +100,16 @@ class Map(tkinter.Canvas):
                 # Find direction of neighboring cell, remove reference from cell walls list
                 cell_walls[neighbour.index(cell_displacement(connecting_cell.position,cell.position))] = False
                 if render_graph:
-                    print('drawing graph')
+                    #print('drawing graph')
                     connecting_cell_position = tuple(map(add, self.canvas_position(connecting_cell.position, radius), self.pan))
                     self.connections.append(Line(cell_position,connecting_cell_position, self))
+            if render_barriers:
 
-            for direction in range(0,6):
-                if cell_walls[direction]:
-                    print('wall in direction: {}'.format(direction))
-                    self.walls.append(Line(self.cells[-1].wall_vertex[direction],
-                                           self.cells[-1].wall_vertex[direction+1%6],self, color='Red'))
+                for direction in range(0,6):
+                    if cell_walls[direction]:
+                        #print('wall in direction: {}'.format(direction))
+                        self.walls.append(Line(self.cells[-1].wall_vertex[direction],
+                                               self.cells[-1].wall_vertex[direction+1%6],self, color='Red'))
 
     # Update
     def change_zoom(self, change):

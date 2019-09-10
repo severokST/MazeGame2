@@ -5,15 +5,15 @@ from numpy.random import choice as weighted_choice
 from math import sin, cos, pi
 from operator import add
 
-world_size = 500
+world_size = 1000
 
-blur_iterations = 100
-elevation_density = 10
+blur_iterations = 3
+elevation_density = 20
 
-elevation_threshold = 5
-moisture_threshould = 1.01
+elevation_threshold = 2
+moisture_threshould = 1.5
 sea_level = 1
-mountain_level = 2
+mountain_level = 5
 
 neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0), 2),
               round(2 * sin(step*pi/6 if step > 0 else 0), 2)) for step in range(1, 13, 2)]
@@ -29,8 +29,8 @@ class Hex(object):
         self.position = position
         self.gen_bias = {}
         self.tile = 'Grey'
-        self.moisture = 1
-        self.elevation = 1
+        self.moisture = 0
+        self.elevation = 0
 
     def is_position(self, position):
         return position == self.position
@@ -150,13 +150,13 @@ class Map(object):
         position_list = [tile.position for tile in self.map]
 
         # Filter graph and initialise tiles for biome selection
-        for index in range(0,len(self.graph)):
+        for index in range(0,len(self.map)):
             # Remove connections not created due to map size limit reached, remove connection.
             self.graph[index] = list(x for x in self.graph[index] if x < len(self.graph) )
 
             #Randomly apply elevation to selected tiles
             if randrange(0,100) < elevation_density:
-                self.map[index].elevation = randrange(1,5)
+                self.map[index].elevation = randrange(10,20)
 
             # Apply increased moisture levels in tiles neighbouring water (None existant tile positions)
             for direction in neighbour:
@@ -164,41 +164,89 @@ class Map(object):
                     self.map[index].moisture += randrange(1,5)
 
         # 3x blur filter pass on each tile to smooth
-        blur_magnitude = 0.1 / blur_iterations
+        blur_magnitude = 1 / blur_iterations
+
+        dictionary_blur_magnitudes = {cell: {cell: 10} for cell in range(0, len(self.map))}
+
+        for graph_link_weight in range(2,4):
+            for cell in range(0, len(self.map)):
+                blur_element_list = [blur_element for blur_element in dictionary_blur_magnitudes[cell].keys()]
+                for blur_element in blur_element_list:
+
+                    dictionary_blur_magnitudes[cell].update(
+                        {neighbour_cell: 10/graph_link_weight
+                         for neighbour_cell in self.graph[blur_element]
+                         if neighbour_cell not in dictionary_blur_magnitudes[cell].keys()})
+
+        for cell in range(0, len(self.map)):
+            cell_normalise = sum(list(x for key,x in dictionary_blur_magnitudes[cell].items()))
+            dictionary_blur_magnitudes[cell] = {key: weight/cell_normalise
+                                                for key,weight in dictionary_blur_magnitudes[cell].items()}
+
+            print('{}: {}'.format(cell, dictionary_blur_magnitudes[cell]))
+
         for iteration in range(0,blur_iterations):
+            update_list_elevation, update_list_moisture = [0] * len(self.map), [0] * len(self.map)
+            for index in dictionary_blur_magnitudes.keys():
+                update_list_elevation[index] = sum(list(self.map[blur_cell].elevation * dictionary_blur_magnitudes[index][blur_cell]
+                                            for blur_cell in dictionary_blur_magnitudes[index].keys()))
+                update_list_moisture[index] = sum(list(self.map[blur_cell].moisture * dictionary_blur_magnitudes[index][blur_cell]
+                         for blur_cell in dictionary_blur_magnitudes[index].keys()))
 
-            print('Blur iteration: ')
-            update_list_elevation, update_list_moisture = [], []
-            for index in range(0, len(self.graph)):
-                current_tile = self.map[index]
-                set_locations = set()
+            for index in dictionary_blur_magnitudes.keys():
+                self.map[index].moisture = update_list_moisture[index]
+                self.map[index].elevation = update_list_elevation[index]
 
-                list_to_check = [index]
-                next_step_list_to_check = []
+            print(update_list_moisture)
+
+         #   print('Blur iteration: {}'.format(iteration))
+
+         #
+
+        #    neighbour_list = [[]]*len(self.map)
+
+            # Generate list of neighbours
+         #   for cell in range(0, len(self.map)):
+
+
+
+
+          #      current_tile = self.map[blur_target_index]
+           #     set_locations = set()
+            #    set_locations.add(blur_target_index)
+             #   #list_to_check = [index]
+              #  next_step_list_to_check = []
 
                 # Iterate though graph of connected cells for up to 3 steps
 
-                for iteration in range(0, 10):
-                    while len(list_to_check) > 0:
-                        target_cell = list_to_check.pop()
-                        for index in range(0, len(self.map)):
-                            if index not in set_locations and target_cell in self.graph[index]:
-                                set_locations.add(index)
-                                next_step_list_to_check.append(index)
+        #        for iteration in range(0, 3):
+         #           list_to_check = [location for location in set_locations]
+          #          while len(list_to_check) > 0:
+           #             target_cell = list_to_check.pop()
+            #            for index in range(0, len(self.graph)):
+             #               if target_cell in self.graph[blur_target_index]:
+              #                  set_locations.add(index)
+               #                 next_step_list_to_check.append(index)
 
-                    for blur_index in set_locations:
-                        try:
-                            update_list_elevation[index] += (self.map[blur_index].elevation - current_tile.elevation) * blur_magnitude
-                            update_list_moisture[index] += (self.map[blur_index].moisture - current_tile.moisture) * blur_magnitude
-                        except IndexError:
-                            pass
+        #            print('{} blur range = {}'.format(blur_target_index, len(set_locations)))
+         #           list_to_check = next_step_list_to_check.copy()
+          #          next_step_list_to_check.clear()
 
-            for index in range(0, len(self.map)):
-                try:
-                    self.map[index].moisture = update_list_moisture[index]
-                    self.map[index].elevation = update_list_elevation[index]
-                except IndexError:
-                    pass
+
+        #        for blur_index in set_locations:
+         #           update_list_elevation[blur_target_index] += (self.map[blur_index].elevation) * blur_magnitude
+          #          update_list_moisture[blur_target_index] += (self.map[blur_index].moisture)* blur_magnitude
+
+
+           #     update_list_elevation[blur_target_index] = update_list_elevation[blur_target_index] / len(set_locations)
+            #    update_list_moisture[blur_target_index] = update_list_moisture[blur_target_index] / len(set_locations)
+
+
+
+        #    for index in range(0, len(self.map)):
+         #       self.map[index].moisture = update_list_moisture[index]
+          #      self.map[index].elevation = update_list_elevation[index]
+
 
         for index in range(0, len(self.map)):
             current_tile = self.map[index]
