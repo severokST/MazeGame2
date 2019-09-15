@@ -8,7 +8,7 @@ from operator import add
 
 import operator
 
-world_size = 400
+world_size = 800
 
 blur_iterations = 3
 elevation_density = 40
@@ -100,6 +100,8 @@ location_size = {'Grass':(1,2), 'Rock': (1,2), 'Sand':(1,2), 'Water':(1,2)}
 class Map(object):
     def __init__(self, max_hex_count=world_size):
 
+        print('Starting map generation')
+
         self.map = []
         self.graph = []
         self.terrain_features = []
@@ -110,9 +112,8 @@ class Map(object):
         # Trialing removal of generation phase biomes
         #biome_current, biome_remaining = 'Grass', 10
 
-
+        print('placing tiles')
         while len(self.map) < max_hex_count and len(new_hex) > 0:
-            print(len(self.map), len(new_hex))
 
             # Get index of next hex
             next_id = len(self.map)
@@ -178,6 +179,7 @@ class Map(object):
             #Graph cleanup to remove orphaned links (if any)
 
 
+        print('Seeding initial elevations')
         # Filter graph and initialise tiles for biome selection
         for index in range(0,len(self.map)):
             # Remove connections not created due to map size limit reached, remove connection.
@@ -188,6 +190,8 @@ class Map(object):
                 self.map[index].elevation = randrange(10,20)
                 self.map[index].moisture = -2
 
+
+        print('Bluring tile elevation with connecting neighbours')
 
         # 3x blur filter pass on each tile to smooth
         blur_magnitude = 1 / blur_iterations
@@ -213,7 +217,6 @@ class Map(object):
             dictionary_blur_magnitudes[cell] = {key: weight/cell_normalise
                                                 for key,weight in dictionary_blur_magnitudes[cell].items()}
 
-            print('{}: {}'.format(cell, dictionary_blur_magnitudes[cell]))
 
         for iteration in range(0,blur_iterations):
             update_list_elevation = [0] * len(self.map)
@@ -224,8 +227,11 @@ class Map(object):
             for index in dictionary_blur_magnitudes.keys():
                 self.map[index].elevation = update_list_elevation[index]
 
+        print('Purging tiles below sea level')
 
         self.purge_sea_level()
+
+        print('Initialing tile moisture (tiles bordering water')
 
         # Apply increased moisture levels in tiles neighbouring water (None existant tile positions)
         position_list = [cell.position for cell in self.map if cell is not None]
@@ -236,7 +242,7 @@ class Map(object):
                         cell.moisture += randrange(1, 3)
 
 
-
+        print('Bluring tile moisture levels')
             # Moisture level blur
         dictionary_blur_magnitudes = {cell: {cell: 10} for cell in range(0, len(self.map)) if self.map[cell] is not None}
 
@@ -257,7 +263,6 @@ class Map(object):
                 dictionary_blur_magnitudes[cell] = {key: weight / cell_normalise
                                                         for key, weight in dictionary_blur_magnitudes[cell].items()}
 
-                print('{}: {}'.format(cell, dictionary_blur_magnitudes[cell]))
 
         for iteration in range(0, blur_iterations):
             update_list_moisture = [0] * len(self.map)
@@ -269,9 +274,7 @@ class Map(object):
             for index in dictionary_blur_magnitudes.keys():
                 self.map[index].moisture = update_list_moisture[index]
 
-            print(update_list_moisture)
-
-
+        print('Applying tile biomes')
 
         # Apply tile values to select terrain.
         for index in range(0, len(self.map)):
@@ -298,6 +301,8 @@ class Map(object):
 
 
         # Generate terrain barriers/features
+
+        print('generating / linking terrain features')
 
         for cell in self.map:
             if cell is not None:
@@ -342,7 +347,6 @@ class Map(object):
                             self.terrain_graph.append(new_graph_entry)
 
 
-        self.print_graph()
 
             # Remove any links created that do not have valid return path (if any)
             #self.graph[index] = list(x for x in self.graph[index] if index in self.graph[x])
