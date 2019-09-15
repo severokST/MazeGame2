@@ -161,21 +161,7 @@ class Map(tkinter.Canvas):
                             #print('drawing graph')
                             connecting_cell_position = tuple(map(add, self.canvas_position(connecting_cell.position, radius), self.pan))
                             self.connections.append(Line(cell_position,connecting_cell_position, self))
-        if False:
-            for barrier in self.map_data.terrain_features:
-                barrier_id = self.map_data.terrain_features.index(barrier)
-
-                print('{}: {}'.format(barrier_id, self.map_data.terrain_graph[barrier_id]) )
-
-
-                #cell_position = tuple(map(add, self.canvas_position(barrier.position, radius*.67), self.pan))
-                #test = Circle(cell_position, self, radius=2)
-
-                orientation = barrier.orientation
-                parent_cell = self.cells[map_cell_associations.index(self.map_data.terrain_graph[barrier_id][0])]
-                pos1, pos2 = parent_cell.wall_vertex[orientation], parent_cell.wall_vertex[orientation+1%6]
-
-                self.walls.append(Barrier(pos1, pos2, self, color=barrier.barrier))
+     
 
 
     # Update
