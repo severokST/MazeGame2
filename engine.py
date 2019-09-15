@@ -31,6 +31,8 @@ class Engine(object):
 
         self.gui.after(int(1000 / 20), self.call)
         self.gui.bind('<Key>', self.keypress)
+        self.gui.map.bind('<B1-Motion>', self.map_pan)
+        self.gui.map.bind('<MouseWheel>', self.map_zoom)
 
         self.gui.run()
 
@@ -42,6 +44,15 @@ class Engine(object):
     def keypress(self, event):
         #Key press macros
         pass
+
+    def map_pan(self, event):
+        self.gui.map.set_pan((event.x, event.y))
+
+    def map_zoom(self, event):
+
+
+        self.gui.map.change_zoom(0.1 if event.delta > 0 else -0.1)
+
 
     def call(self):
         # Todo Engine update hooks here

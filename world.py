@@ -5,15 +5,18 @@ from numpy.random import choice as weighted_choice
 from math import sin, cos, pi
 from operator import add
 
-world_size = 1000
+
+import operator
+
+world_size = 400
 
 blur_iterations = 3
-elevation_density = 20
+elevation_density = 40
 
 elevation_threshold = 2
-moisture_threshould = 1.5
-sea_level = 1
-mountain_level = 5
+moisture_threshould = 0.5
+sea_level = 2
+tree_line = 8
 
 neighbour = [(round(2 * cos(step*pi/6 if step > 0 else 0), 2),
               round(2 * sin(step*pi/6 if step > 0 else 0), 2)) for step in range(1, 13, 2)]
@@ -25,12 +28,12 @@ def connecting_key(origin, direction_key):
 
 # Generic Hex-tile class.
 class Hex(object):
-    def __init__(self, position):
+    def __init__(self, position, elevation = 0):
         self.position = position
         self.gen_bias = {}
         self.tile = 'Grey'
         self.moisture = 0
-        self.elevation = 0
+        self.elevation = elevation
 
     def is_position(self, position):
         return position == self.position
@@ -38,32 +41,55 @@ class Hex(object):
     def delta_position(self, position):
         return tuple(map(add, self.position, position))
 
-
 class Grass(Hex):
-    def __init__(self, position):
-        Hex.__init__(self, position)
-        self.tile = 'Green'
+    def __init__(self, position, elevation = 0):
+        Hex.__init__(self, position, elevation)
+
+        self.type = 'Grass'
+        self.tile = 'green'
         self.gen_bias.update({'Grass':1, 'Rock':0.2, 'Sand': 0.01, 'Water':0.3})
 
-
 class Rock(Hex):
-    def __init__(self, position):
-        Hex.__init__(self, position)
-        self.tile = 'Grey'
+    def __init__(self, position, elevation = 0):
+        Hex.__init__(self, position, elevation)
+        self.type = 'Rock'
+        self.tile = 'grey'
         self.gen_bias.update({'Grass': 0.1, 'Rock': 2, 'Sand': 0.5, 'Water':0.1})
 
-
 class Sand(Hex):
-    def __init__(self, position):
-        Hex.__init__(self, position)
-        self.tile = 'Yellow'
+    def __init__(self, position, elevation = 0):
+        Hex.__init__(self, position, elevation)
+        self.type = 'Sand'
+        self.tile = 'yellow'
         self.gen_bias.update({'Rock': 0.5, 'Sand': 3, 'Water': -0.3})
 
 class Water(Hex):
-    def __init__(self, position):
-        Hex.__init__(self, position)
+    def __init__(self, position, elevation = 0):
+        Hex.__init__(self, position, elevation)
+        self.type = 'Water'
         self.tile = 'Blue'
         self.gen_bias.update({'Rock': 0.5, 'Sand': -0.2, 'Grass': 0.5, 'Water':0.5})
+
+
+class Barrier(object):
+    def __init__(self, position, orientation):
+        self.position = position
+        self.orientation = orientation
+
+class Rocky_Outcrop(Barrier):
+    def __init__(self, position, orientation):
+        Barrier.__init__(self, position, orientation)
+        self.barrier = 'gray20'
+
+class Forest(Barrier):
+    def __init__(self, position, orientation):
+        Barrier.__init__(self, position, orientation)
+        self.barrier = 'forest green'
+
+class Shore(Barrier):
+    def __init__(self, position, orientation):
+        Barrier.__init__(self, position, orientation)
+        self.barrier = 'gold3'
 
 
 location_types = {'Grass': Grass, 'Rock': Rock, 'Sand':Sand, 'Water': Water}
@@ -73,8 +99,11 @@ location_size = {'Grass':(1,2), 'Rock': (1,2), 'Sand':(1,2), 'Water':(1,2)}
 
 class Map(object):
     def __init__(self, max_hex_count=world_size):
-        self.graph = []
+
         self.map = []
+        self.graph = []
+        self.terrain_features = []
+        self.terrain_graph = []
 
         new_hex = [(0, 0)]
 
@@ -147,7 +176,7 @@ class Map(object):
 
 
             #Graph cleanup to remove orphaned links (if any)
-        position_list = [tile.position for tile in self.map]
+
 
         # Filter graph and initialise tiles for biome selection
         for index in range(0,len(self.map)):
@@ -157,15 +186,15 @@ class Map(object):
             #Randomly apply elevation to selected tiles
             if randrange(0,100) < elevation_density:
                 self.map[index].elevation = randrange(10,20)
+                self.map[index].moisture = -2
 
-            # Apply increased moisture levels in tiles neighbouring water (None existant tile positions)
-            for direction in neighbour:
-                if self.map[index].delta_position(direction) not in position_list:
-                    self.map[index].moisture += randrange(1,5)
 
         # 3x blur filter pass on each tile to smooth
         blur_magnitude = 1 / blur_iterations
 
+
+
+        # Elevation level blur
         dictionary_blur_magnitudes = {cell: {cell: 10} for cell in range(0, len(self.map))}
 
         for graph_link_weight in range(2,4):
@@ -178,6 +207,7 @@ class Map(object):
                          for neighbour_cell in self.graph[blur_element]
                          if neighbour_cell not in dictionary_blur_magnitudes[cell].keys()})
 
+
         for cell in range(0, len(self.map)):
             cell_normalise = sum(list(x for key,x in dictionary_blur_magnitudes[cell].items()))
             dictionary_blur_magnitudes[cell] = {key: weight/cell_normalise
@@ -186,101 +216,130 @@ class Map(object):
             print('{}: {}'.format(cell, dictionary_blur_magnitudes[cell]))
 
         for iteration in range(0,blur_iterations):
-            update_list_elevation, update_list_moisture = [0] * len(self.map), [0] * len(self.map)
+            update_list_elevation = [0] * len(self.map)
             for index in dictionary_blur_magnitudes.keys():
                 update_list_elevation[index] = sum(list(self.map[blur_cell].elevation * dictionary_blur_magnitudes[index][blur_cell]
                                             for blur_cell in dictionary_blur_magnitudes[index].keys()))
-                update_list_moisture[index] = sum(list(self.map[blur_cell].moisture * dictionary_blur_magnitudes[index][blur_cell]
-                         for blur_cell in dictionary_blur_magnitudes[index].keys()))
+
+            for index in dictionary_blur_magnitudes.keys():
+                self.map[index].elevation = update_list_elevation[index]
+
+
+        self.purge_sea_level()
+
+        # Apply increased moisture levels in tiles neighbouring water (None existant tile positions)
+        position_list = [cell.position for cell in self.map if cell is not None]
+        for cell in self.map:
+            if cell is not None:
+                for direction in neighbour:
+                    if cell.delta_position(direction) not in position_list:
+                        cell.moisture += randrange(1, 3)
+
+
+
+            # Moisture level blur
+        dictionary_blur_magnitudes = {cell: {cell: 10} for cell in range(0, len(self.map)) if self.map[cell] is not None}
+
+        for graph_link_weight in range(2, 4):
+            for cell in range(0, len(self.map)):
+                if self.map[cell] is not None:
+
+                    blur_element_list = [blur_element for blur_element in dictionary_blur_magnitudes[cell].keys() if self.map[blur_element] is not None]
+                    for blur_element in blur_element_list:
+                        dictionary_blur_magnitudes[cell].update(
+                                {neighbour_cell: 10 / graph_link_weight
+                                for neighbour_cell in self.graph[blur_element]
+                                if neighbour_cell not in dictionary_blur_magnitudes[cell].keys()})
+
+        for cell in range(0, len(self.map)):
+            if self.map[cell] is not None:
+                cell_normalise = sum(list(x for key, x in dictionary_blur_magnitudes[cell].items()))
+                dictionary_blur_magnitudes[cell] = {key: weight / cell_normalise
+                                                        for key, weight in dictionary_blur_magnitudes[cell].items()}
+
+                print('{}: {}'.format(cell, dictionary_blur_magnitudes[cell]))
+
+        for iteration in range(0, blur_iterations):
+            update_list_moisture = [0] * len(self.map)
+            for index in dictionary_blur_magnitudes.keys():
+                update_list_moisture[index] = sum(
+                    list(self.map[blur_cell].moisture * dictionary_blur_magnitudes[index][blur_cell]
+                             for blur_cell in dictionary_blur_magnitudes[index].keys() if self.map[blur_cell] is not None))
 
             for index in dictionary_blur_magnitudes.keys():
                 self.map[index].moisture = update_list_moisture[index]
-                self.map[index].elevation = update_list_elevation[index]
 
             print(update_list_moisture)
 
-         #   print('Blur iteration: {}'.format(iteration))
-
-         #
-
-        #    neighbour_list = [[]]*len(self.map)
-
-            # Generate list of neighbours
-         #   for cell in range(0, len(self.map)):
 
 
-
-
-          #      current_tile = self.map[blur_target_index]
-           #     set_locations = set()
-            #    set_locations.add(blur_target_index)
-             #   #list_to_check = [index]
-              #  next_step_list_to_check = []
-
-                # Iterate though graph of connected cells for up to 3 steps
-
-        #        for iteration in range(0, 3):
-         #           list_to_check = [location for location in set_locations]
-          #          while len(list_to_check) > 0:
-           #             target_cell = list_to_check.pop()
-            #            for index in range(0, len(self.graph)):
-             #               if target_cell in self.graph[blur_target_index]:
-              #                  set_locations.add(index)
-               #                 next_step_list_to_check.append(index)
-
-        #            print('{} blur range = {}'.format(blur_target_index, len(set_locations)))
-         #           list_to_check = next_step_list_to_check.copy()
-          #          next_step_list_to_check.clear()
-
-
-        #        for blur_index in set_locations:
-         #           update_list_elevation[blur_target_index] += (self.map[blur_index].elevation) * blur_magnitude
-          #          update_list_moisture[blur_target_index] += (self.map[blur_index].moisture)* blur_magnitude
-
-
-           #     update_list_elevation[blur_target_index] = update_list_elevation[blur_target_index] / len(set_locations)
-            #    update_list_moisture[blur_target_index] = update_list_moisture[blur_target_index] / len(set_locations)
-
-
-
-        #    for index in range(0, len(self.map)):
-         #       self.map[index].moisture = update_list_moisture[index]
-          #      self.map[index].elevation = update_list_elevation[index]
-
-
+        # Apply tile values to select terrain.
         for index in range(0, len(self.map)):
-            current_tile = self.map[index]
-            moisture, elevation = current_tile.moisture, current_tile.elevation
+            if self.map[index] is not None:
+                current_tile = self.map[index]
+                moisture, elevation = current_tile.moisture, current_tile.elevation
 
-            if elevation < sea_level:
-                self.map[index] = Water(current_tile.position)
-                continue
+                if elevation < sea_level:
+                    self.map[index] = None
+                    continue
 
-            if elevation > mountain_level:
-                self.map[index] = Rock(current_tile.position)
-                continue
+                if elevation > tree_line:
+                    self.map[index] = Rock(current_tile.position, elevation = elevation)
+                    continue
 
-            if moisture > moisture_threshould:
-                self.map[index] = Grass(current_tile.position)
-                continue
+                if moisture > moisture_threshould:
+                    self.map[index] = Grass(current_tile.position, elevation = elevation)
+                    continue
 
-            if moisture < moisture_threshould:
-                self.map[index] = Sand(current_tile.position)
+                if moisture < moisture_threshould:
+                    self.map[index] = Sand(current_tile.position, elevation = elevation)
 
-
-            #if elevation > elevation_threshold and moisture < moisture_threshould:
-            #        self.map[index] = Rock(current_tile.position)
-
-            #if elevation < elevation_threshold and moisture < moisture_threshould:
-            #        self.map[index] = Sand(current_tile.position)
-
-            #if elevation < elevation_threshold and moisture > moisture_threshould:
-            #        self.map[index] = Water(current_tile.position)
-
-            #if elevation > elevation_threshold and moisture > moisture_threshould:
-            #        self.map[index] = Grass(current_tile.position)
+                self.map[index].elevation = elevation
 
 
+        # Generate terrain barriers/features
+
+        for cell in self.map:
+            if cell is not None:
+                cell_id = self.map.index(cell)
+                # If all directions already connected, no barriers to generate
+                #if len(self.graph[cell_id]) + len([x for x in self.terrain_graph if cell_id in x]) >= 6:
+                #    continue
+
+                for direction in neighbour:
+                    test_location = cell.delta_position(direction)
+
+                    barrier_pos = (round(cell.position[0] + test_location[0] / 2, 2), round(cell.position[1] + test_location[1] / 2,2) )
+                    detected_cell = self.cell_at_position(test_location)
+                    detected_cell_id = None if detected_cell is None else self.map.index(detected_cell)
+
+                    # If this barrier has already been registered (Other neighbour processing)
+                    # or detected cell is connected, move to next candidate
+                    if barrier_pos in [x.position for x in self.terrain_features] or \
+                            detected_cell_id in self.graph[cell_id]:
+                        continue
+
+                    if detected_cell not in self.graph[cell_id]:
+                        barrier_orientation = neighbour.index(direction)
+                        terrain_mix = (None if cell is None else cell.type, None if detected_cell is None else detected_cell.type)
+                        if None not in terrain_mix:
+                            # Default terrain barrier (Cells are Mountain or Desert ONLY)
+                            barrier_type = Rocky_Outcrop
+
+                            # Override if grass is present, Forest generates at higher priority than Rock
+                            if 'Grass' in terrain_mix:
+                                barrier_type = Forest
+
+                            # Override if cell neighbours water, Shore generates at highest priority
+                            if None in terrain_mix:
+                                barrier_type = Shore
+
+
+                            new_graph_entry = [cell_id] if detected_cell is None else [cell_id, detected_cell_id]
+
+
+                            self.terrain_features.append(barrier_type(barrier_pos, barrier_orientation))
+                            self.terrain_graph.append(new_graph_entry)
 
 
         self.print_graph()
@@ -289,69 +348,35 @@ class Map(object):
             #self.graph[index] = list(x for x in self.graph[index] if index in self.graph[x])
 
 
+    def map_neighbours(self, cell, distance):
+        neighbour_map = {cell: 0}
+        for graph_link in range(1,distance+1):
+            for cell_key in neighbour_map.keys():
+                neighbour_map.update({neighbour_cell: graph_link} for neighbour_cell in self.graph[cell_key]
+                                     if neighbour_cell not in neighbour_map.keys())
 
-    def biome_selection(self, current_id):
-
-        set_neighbour = set()
-
-        list_to_check = [current_id]
-        next_step_list_to_check = []
-
-        # Iterate though graph of connected cells for up to 3 steps
-
-        for iteration in range(0, 6):
-            while len(list_to_check) > 0:
-                target_cell = list_to_check.pop()
-
-                for index in range(0, len(self.graph)):
-
-                    if index not in set_neighbour and target_cell in self.graph[index]:
-                        set_neighbour.add(index)
-                        next_step_list_to_check.append(index)
+        return neighbour_map
 
 
-
-            list_to_check = next_step_list_to_check.copy()
-            next_step_list_to_check.clear()
-
-        print(set_neighbour)
-
-        # Initialise biome selection weightings
-        selection_bias = {'Grass': 1, 'Sand': 1, 'Rock':1, 'Water':1}
-
-
-        # Step though listed neighbouring cells, accumulate biases where avaliable
-        for cell_id in set_neighbour:
-            cell_gen_bias = self.map[cell_id]
-            for biome_entry, value in cell_gen_bias.gen_bias.items():
-                selection_bias[biome_entry] += value
-
-        # Scale calculated weights against quota tally, Tapers off terrain selection if one type becomes too common.
-        for terrain, quota in location_quota.items():
-            selection_bias[terrain] *= quota[1]/quota[0]
-
-        print(selection_bias)
-
-        biome_list = [(terrain, weight) for terrain, weight in selection_bias.items()]
-        biome_choices = [biome[0] for biome in biome_list]
-        biome_chance = [biome[1] for biome in biome_list]
-        biome_chance = [biome if biome > 0 else 0 for biome in biome_chance]
-        biome_chance = [biome/sum(biome_chance) for biome in biome_chance]
-
-        selection = weighted_choice(biome_choices, 1, p=biome_chance)[0]
-        size_start, size_stop = location_size[selection]
-        biome_count = randrange(size_start, size_stop)
-
-        location_quota[selection][1] -= biome_count
-        if  location_quota[selection][1] <0:
-            location_quota[selection][1] = 1
+    def cell_at_position(self, position):
+        for cell in self.map:
+            if cell is None:
+                continue
+            if cell.position == position:
+                return cell
+        return None
 
 
-        return selection, biome_count
+    def purge_sea_level(self):
+        # Remove tiles calculated to be below sea level
+        self.map = [x if x.elevation > sea_level else None for x in self.map]
+        # Update graph for removed tiles
+        self.graph = [self.graph[x] if self.map[x] is not None else [] for x in range(0, len(self.map))]
+        for index in range(0, len(self.graph)):
+            self.graph[index] = [x for x in self.graph[index] if self.map[index] is not None]
 
 
     def print_graph(self):
-        for index in range(0,len(self.graph)):
-            print ('{}, {}: {}'.format(index, self.map[index].position, self.graph[index]))
-
-
+        for index in range(0, len(self.graph)):
+            if self.map[index] is not None:
+                print ('{}, {}: {}'.format(index, self.map[index].position, self.graph[index]))
